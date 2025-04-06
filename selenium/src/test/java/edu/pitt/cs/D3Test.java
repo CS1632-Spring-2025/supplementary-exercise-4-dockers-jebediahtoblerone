@@ -2,6 +2,8 @@
 package edu.pitt.cs;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import org.openqa.selenium.chrome.ChromeOptions;
+
 
 import org.junit.Test;
 import org.junit.Before;
