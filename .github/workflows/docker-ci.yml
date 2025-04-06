@@ -8,16 +8,12 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   test_dockerized_webserver:
-
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -31,14 +27,37 @@ jobs:
       - name: Setup Docker buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Install Chrome Web Browser
-        run: sudo apt-get -y install google-chrome-stable
-
-      - name: Install Chrome Web Driver
-        run: selenium/manager/linux/selenium-manager --browser chrome
+      - name: Install Chrome and ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install google-chrome-stable
+          CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION%.*}")
+          wget -O chromedriver.zip "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+          sudo unzip -o chromedriver.zip -d /usr/local/bin
+          sudo chmod +x /usr/local/bin/chromedriver
+          rm chromedriver.zip
 
       - name: Launch Web Service
-        run: docker compose up -d
+        run: docker compose up -d --build
+
+      - name: Wait for Web Service
+        run: |
+          chmod +x wait-for-webserver.sh
+          ./wait-for-webserver.sh
 
       - name: Run Selenium Tests
-        run: cd selenium && mvn test
+        run: |
+          cd selenium
+          mvn test
+          TEST_EXIT_CODE=$?
+          # Capture logs if tests fail
+          if [ $TEST_EXIT_CODE -ne 0 ]; then
+            docker compose logs > docker_logs.txt
+            echo "::warning::Tests failed, see docker_logs.txt for container logs"
+          fi
+          exit $TEST_EXIT_CODE
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down
